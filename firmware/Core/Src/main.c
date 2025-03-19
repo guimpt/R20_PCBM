@@ -31,7 +31,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define VALID_HALL_STATES ((1 << 1) | (1 << 3) | (1 << 2) | (1 << 6) | (1 << 4) | (1 << 5))
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -48,7 +48,8 @@ PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
 MCT8316 mct8316;
-
+volatile int32_t hall_count = 0;
+volatile uint8_t last_hall_state = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -58,7 +59,8 @@ static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USB_PCD_Init(void);
 /* USER CODE BEGIN PFP */
-
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
+static inline uint8_t is_valid_hall_state(uint8_t state);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -302,9 +304,16 @@ static void MX_GPIO_Init(void)
 
 	/*Configure GPIO pins : HALL_A_Pin HALL_B_Pin HALL_C_Pin */
 	GPIO_InitStruct.Pin = HALL_A_Pin|HALL_B_Pin|HALL_C_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	/* EXTI interrupt init*/
+	HAL_NVIC_SetPriority(EXTI0_1_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(EXTI0_1_IRQn);
+
+	HAL_NVIC_SetPriority(EXTI2_3_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(EXTI2_3_IRQn);
 
 	/* USER CODE BEGIN MX_GPIO_Init_2 */
 
@@ -312,6 +321,51 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+// Function to check if a Hall state is valid using bitmasking
+static inline uint8_t is_valid_hall_state(uint8_t state)
+{
+    return (VALID_HALL_STATES & (1 << state)) != 0;
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	uint32_t gpio_read = HALL_A_GPIO_Port->IDR;
+
+	// Read the current Hall state
+	uint8_t hall_state = (__HALL_READ(gpio_read, HALL_A_Pin) << 2) |
+			(__HALL_READ(gpio_read, HALL_B_Pin) << 1) |
+			(__HALL_READ(gpio_read, HALL_C_Pin) << 0);
+
+    // Ignore noise: process only if it's a valid Hall state
+    if (!is_valid_hall_state(hall_state))
+    {
+        return;  // Skip invalid states (caused by noise)
+    }
+
+	// Determine direction based on the Hall sequence
+	if (((last_hall_state == 0b001) && (hall_state == 0b011)) ||
+			((last_hall_state == 0b011) && (hall_state == 0b010)) ||
+			((last_hall_state == 0b010) && (hall_state == 0b110)) ||
+			((last_hall_state == 0b110) && (hall_state == 0b100)) ||
+			((last_hall_state == 0b100) && (hall_state == 0b101)) ||
+			((last_hall_state == 0b101) && (hall_state == 0b001)))
+	{
+		hall_count++;
+	}
+	else if (((last_hall_state == 0b001) && (hall_state == 0b101)) ||
+			((last_hall_state == 0b101) && (hall_state == 0b100)) ||
+			((last_hall_state == 0b100) && (hall_state == 0b110)) ||
+			((last_hall_state == 0b110) && (hall_state == 0b010)) ||
+			((last_hall_state == 0b010) && (hall_state == 0b011)) ||
+			((last_hall_state == 0b011) && (hall_state == 0b001)))
+	{
+		hall_count--;
+	}
+
+	// Update last state
+	last_hall_state = hall_state;
+}
 
 /* USER CODE END 4 */
 

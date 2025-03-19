@@ -61,15 +61,18 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define HALL_A_Pin GPIO_PIN_0
 #define HALL_A_GPIO_Port GPIOA
+#define HALL_A_EXTI_IRQn EXTI0_1_IRQn
 #define HALL_B_Pin GPIO_PIN_1
 #define HALL_B_GPIO_Port GPIOA
+#define HALL_B_EXTI_IRQn EXTI0_1_IRQn
 #define HALL_C_Pin GPIO_PIN_2
 #define HALL_C_GPIO_Port GPIOA
+#define HALL_C_EXTI_IRQn EXTI2_3_IRQn
 #define PWM_Pin GPIO_PIN_3
 #define PWM_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
-
+#define __HALL_READ(__gpio_read__, __pin__)		((__gpio_read__) & (__pin__))
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

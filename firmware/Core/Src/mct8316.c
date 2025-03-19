@@ -58,7 +58,7 @@ HAL_StatusTypeDef MCT8316_Init(MCT8316 *mct8316) {
     uint8_t ic_status;
     status = MCT8316_Read(mct8316, MCT8316_REG_IC_STATUS, &ic_status);
     if (status != HAL_OK) return status;
-    if (ic_status == 0xFF) return HAL_ERROR; // Assuming 0xFF means SPI failure
+    if (ic_status == 0xFF) return HAL_ERROR; // Assuming 0xFF means SPI failure TODO improve this check
 
     return HAL_OK;
 }

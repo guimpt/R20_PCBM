@@ -72,7 +72,7 @@ void Error_Handler(void);
 #define PWM_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
-#define __HALL_READ(__gpio_read__, __pin__)		((__gpio_read__) & (__pin__))
+#define __HALL_READ(__gpio_read__, __pin__)		(((__gpio_read__) & (__pin__)) != 0)
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "mct8316.h"
+#include "math.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,6 +51,7 @@ PCD_HandleTypeDef hpcd_USB_FS;
 MCT8316 mct8316;
 volatile int32_t hall_count = 0;
 volatile uint8_t last_hall_state = 0;
+uint8_t hall_state;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -103,11 +105,17 @@ int main(void)
 	/* USER CODE BEGIN 2 */
 
 	/* Initialize MCT8316ZR */
+	mct8316.hspi=&hspi1;
 	MCT8316_Init(&mct8316);
 
 	/* Initialize PWM generation */
 	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
 	TIM2->CCR4 = 0;
+	uint32_t dummy;
+//	TIM2->CCR4 = 0;
+	MCT8316_SetDirection(&mct8316,0);
+//	MCT8316_ClearFaults(&mct8316);
+
 
 	/* USER CODE END 2 */
 
@@ -116,7 +124,15 @@ int main(void)
 	while (1)
 	{
 		MCT8316_UpdateStatus(&mct8316);
+		MCT8316_ClearFaults(&mct8316);
 		HAL_Delay(100);
+		dummy = HAL_GetTick()/500 + 10;
+
+		if(dummy > 50) dummy = 50;
+
+		TIM2->CCR4 = dummy;
+
+		if(HAL_GetTick()/1000 == 50) MCT8316_SetDirection(&mct8316,1);
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -187,15 +203,15 @@ static void MX_SPI1_Init(void)
 	hspi1.Init.Direction = SPI_DIRECTION_2LINES;
 	hspi1.Init.DataSize = SPI_DATASIZE_16BIT;
 	hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
-	hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
-	hspi1.Init.NSS = SPI_NSS_HARD_OUTPUT;
-	hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+	hspi1.Init.CLKPhase = SPI_PHASE_2EDGE;
+	hspi1.Init.NSS = SPI_NSS_SOFT;
+	hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
 	hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
 	hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
 	hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
 	hspi1.Init.CRCPolynomial = 7;
 	hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-	hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+	hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
 	if (HAL_SPI_Init(&hspi1) != HAL_OK)
 	{
 		Error_Handler();
@@ -333,7 +349,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	uint32_t gpio_read = HALL_A_GPIO_Port->IDR;
 
 	// Read the current Hall state
-	uint8_t hall_state = (__HALL_READ(gpio_read, HALL_A_Pin) << 2) |
+	hall_state = (__HALL_READ(gpio_read, HALL_A_Pin) << 2) |
 			(__HALL_READ(gpio_read, HALL_B_Pin) << 1) |
 			(__HALL_READ(gpio_read, HALL_C_Pin) << 0);
 

@@ -70,6 +70,8 @@ void Error_Handler(void);
 #define HALL_C_EXTI_IRQn EXTI2_3_IRQn
 #define PWM_Pin GPIO_PIN_3
 #define PWM_GPIO_Port GPIOA
+#define SPI1_CS_Pin GPIO_PIN_4
+#define SPI1_CS_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 #define __HALL_READ(__gpio_read__, __pin__)		(((__gpio_read__) & (__pin__)) != 0)

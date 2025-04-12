@@ -35,6 +35,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define VALID_HALL_STATES ((1 << 1) | (1 << 3) | (1 << 2) | (1 << 6) | (1 << 4) | (1 << 5))
+#define ALPHA_HALL_SPEED	0.2f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,6 +47,7 @@
 SPI_HandleTypeDef hspi1;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
 PCD_HandleTypeDef hpcd_USB_FS;
 
@@ -60,6 +62,11 @@ volatile uint32_t last_tick = 0;
 PID posPID;
 int32_t action_k;
 int32_t action_km1;
+uint16_t timer_counter = 0;
+uint8_t flag_100hz = RESET;
+uint8_t flag_10hz = RESET;
+uint8_t flag_1hz = RESET;
+uint32_t seconds_counter = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -68,6 +75,7 @@ static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USB_PCD_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 static inline uint8_t is_valid_hall_state(uint8_t state);
@@ -110,6 +118,7 @@ int main(void)
 	MX_SPI1_Init();
 	MX_TIM2_Init();
 	MX_USB_PCD_Init();
+	MX_TIM3_Init();
 	/* USER CODE BEGIN 2 */
 
 	/* Initialize MCT8316ZR */
@@ -118,20 +127,23 @@ int main(void)
 
 	/* Initialize PWM generation */
 	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
-//	TIM2->CCR4 = 50;
+
+	/* Initialize PID timer */
+	HAL_TIM_Base_Start_IT(&htim3);
+	//	TIM2->CCR4 = 50;
 	TIM2->CCR4 = 50;
 	MCT8316_SetDirection(&mct8316,1);
 
-	posPID.Umax = 50;
-	posPID.Umin = -50;
+	posPID.Umax = 100;
+	posPID.Umin = -100;
 	posPID.kd = 0;
-	posPID.kp = 10;
-	posPID.ki = 0;
+	posPID.kp = 5;
+	posPID.ki = 0.02;
 	posPID.loop_freq = 100; //[Hz]
 	posPID.w_cutoff = 1;
 	PID_Initialize(&posPID);
 
-	posPID.x_k = 100 * posPID.multiplier;
+	posPID.x_k = 2 * posPID.multiplier;
 
 
 	/* USER CODE END 2 */
@@ -140,32 +152,40 @@ int main(void)
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		MCT8316_UpdateStatus(&mct8316);
-		HAL_Delay(10);
-		posPID.h_k = hall_count * posPID.multiplier;
-		PID_Update(&posPID);
-		hall_speed = ((float)(hall_count - last_hall_count)) / ((float)(HAL_GetTick() - last_tick));
-		// Update last state
-		last_hall_count = hall_count;
-		last_tick = HAL_GetTick();
-		action_k = posPID.y_k / ((int32_t)posPID.multiplier);
-//		if(__SIGN(action_k) != __SIGN(action_km1)){
-//			if(__SIGN(action_k) == 1) MCT8316_SetDirection(&mct8316,1);
-//			else if(__SIGN(action_k) == -1) MCT8316_SetDirection(&mct8316,0);
-//		}
+		if(posPID.update_flag){
+			posPID.update_flag = RESET;
+			posPID.h_k = hall_speed * posPID.multiplier;
+			PID_Update(&posPID);
+			action_k = posPID.y_k / ((int32_t)posPID.multiplier);
+			TIM2->CCR4 = abs(action_k)+15;
+		}
+		if(flag_100hz){
+			flag_100hz = RESET;
+			if(__SIGN(action_k) != __SIGN(action_km1)){
+				if(__SIGN(action_k) == 1) MCT8316_SetDirection(&mct8316,1);
+				else if(__SIGN(action_k) == -1) MCT8316_SetDirection(&mct8316,0);
+			}
+			action_km1 = action_k;
+		}
+		if(flag_10hz){
+			flag_10hz = RESET;
+			hall_speed = ALPHA_HALL_SPEED*(((float)(hall_count - last_hall_count)) * 10.f / 12.f) +
+					(1.f - ALPHA_HALL_SPEED) * hall_speed;
+			last_hall_count = hall_count;
+			last_tick = HAL_GetTick();
+			MCT8316_UpdateStatus(&mct8316); // TODO check errors and clear if needed
+		}
+		if(flag_1hz){
+			flag_1hz = RESET;
+			seconds_counter++;
+			if(seconds_counter == 10) posPID.x_k = -2 * posPID.multiplier;
+			else if(seconds_counter == 20) posPID.x_k = 10 * posPID.multiplier;
+			else if(seconds_counter == 30) posPID.x_k = -20 * posPID.multiplier;
+			else if(seconds_counter == 40) posPID.x_k = 40 * posPID.multiplier;
+			else if(seconds_counter == 50) posPID.x_k = -40 * posPID.multiplier;
+			else if(seconds_counter == 60) posPID.x_k = 50 * posPID.multiplier;
+		}
 
-//		TIM2->CCR4 = 20+abs(action_k);
-//		TIM2->CCR4 = 40;
-
-		action_km1 = action_k;
-//		MCT8316_ClearFaults(&mct8316);
-//		dummy = HAL_GetTick()/500 + 10;
-//
-//		if(dummy > 50) dummy = 50;
-//
-//		TIM2->CCR4 = dummy;
-//
-//		if(HAL_GetTick()/1000 == 50) MCT8316_SetDirection(&mct8316,1);
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -238,7 +258,7 @@ static void MX_SPI1_Init(void)
 	hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
 	hspi1.Init.CLKPhase = SPI_PHASE_2EDGE;
 	hspi1.Init.NSS = SPI_NSS_SOFT;
-	hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+	hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
 	hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
 	hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
 	hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -305,6 +325,51 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+ * @brief TIM3 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_TIM3_Init(void)
+{
+
+	/* USER CODE BEGIN TIM3_Init 0 */
+
+	/* USER CODE END TIM3_Init 0 */
+
+	TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+	TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+	/* USER CODE BEGIN TIM3_Init 1 */
+
+	/* USER CODE END TIM3_Init 1 */
+	htim3.Instance = TIM3;
+	htim3.Init.Prescaler = 0;
+	htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+	htim3.Init.Period = 48000;
+	htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+	htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+	if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+	if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+	sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+	if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	/* USER CODE BEGIN TIM3_Init 2 */
+
+	/* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
  * @brief USB Initialization Function
  * @param None
  * @retval None
@@ -351,11 +416,21 @@ static void MX_GPIO_Init(void)
 	/* GPIO Ports Clock Enable */
 	__HAL_RCC_GPIOA_CLK_ENABLE();
 
+	/*Configure GPIO pin Output Level */
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
+
 	/*Configure GPIO pins : HALL_A_Pin HALL_B_Pin HALL_C_Pin */
 	GPIO_InitStruct.Pin = HALL_A_Pin|HALL_B_Pin|HALL_C_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	/*Configure GPIO pin : SPI1_CS_Pin */
+	GPIO_InitStruct.Pin = SPI1_CS_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(SPI1_CS_GPIO_Port, &GPIO_InitStruct);
 
 	/* EXTI interrupt init*/
 	HAL_NVIC_SetPriority(EXTI0_1_IRQn, 0, 0);
@@ -374,7 +449,7 @@ static void MX_GPIO_Init(void)
 // Function to check if a Hall state is valid using bitmasking
 static inline uint8_t is_valid_hall_state(uint8_t state)
 {
-    return (VALID_HALL_STATES & (1 << state)) != 0;
+	return (VALID_HALL_STATES & (1 << state)) != 0;
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
@@ -387,11 +462,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			(__HALL_READ(gpio_read, HALL_B_Pin) << 1) |
 			(__HALL_READ(gpio_read, HALL_C_Pin) << 0);
 
-    // Ignore noise: process only if it's a valid Hall state
-    if (!is_valid_hall_state(hall_state))
-    {
-        return;  // Skip invalid states (caused by noise)
-    }
+	// Ignore noise: process only if it's a valid Hall state
+	if (!is_valid_hall_state(hall_state))
+	{
+		return;  // Skip invalid states (caused by noise)
+	}
 
 	// Determine direction based on the Hall sequence
 	if (((last_hall_state == 0b001) && (hall_state == 0b011)) ||
@@ -416,6 +491,24 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	// Update last state
 	last_hall_state = hall_state;
 
+}
+
+
+/**
+  * @brief This function handles TIM3 global interrupt.
+  */
+void TIM3_IRQHandler(void)
+{
+  HAL_TIM_IRQHandler(&htim3);
+  posPID.update_flag = SET;
+  if(++timer_counter >= 1000) {
+	  timer_counter = 0;
+	  flag_1hz = SET;
+  }
+  if((timer_counter%10) == 0) { // 100Hz
+	  flag_100hz = SET;
+	  if((timer_counter%100) == 0) flag_10hz = SET; // 10Hz
+  }
 }
 
 /* USER CODE END 4 */

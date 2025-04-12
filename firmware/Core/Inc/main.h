@@ -73,6 +73,13 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 #define __HALL_READ(__gpio_read__, __pin__)		(((__gpio_read__) & (__pin__)) != 0)
+
+#define __SIGN(__x__)                           \
+    (                                           \
+        ((__x__) > 0) ?  1 :                    \
+        ((__x__) < 0) ? -1 :                    \
+                         0                      \
+    )
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

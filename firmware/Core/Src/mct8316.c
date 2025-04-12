@@ -151,7 +151,7 @@ HAL_StatusTypeDef MCT8316_ClearFaults(MCT8316 *mct8316) {
 /* Private functions */
 static HAL_StatusTypeDef MCT8316_Write(MCT8316 *mct8316, uint8_t address, uint8_t data){
 	HAL_StatusTypeDef status;
-	uint16_t tx_message = (uint16_t) data, rx_message, purge;
+	uint16_t tx_message = (uint16_t) data, rx_message;
 	tx_message |= (MCT8316_MSG_W << MCT8316_MSG_RW_BIT) | (address << MCT8316_MSG_ADDRESS_BIT);
 	/* Compute parity */
 	uint8_t parity = 0;
@@ -168,20 +168,12 @@ static HAL_StatusTypeDef MCT8316_Write(MCT8316 *mct8316, uint8_t address, uint8_
 	status = HAL_SPI_TransmitReceive(mct8316->hspi, (uint8_t *) &tx_message, (uint8_t *) &rx_message, 1, MCT8316_SPI_TIMEOUT);
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 
-	/* Purge SPI bus */
-//	HAL_Delay(1);
-//	tx_message = 0;
-//
-//	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-//	status = HAL_SPI_TransmitReceive(mct8316->hspi, (uint8_t *) &tx_message, (uint8_t *) &purge, 1, MCT8316_SPI_TIMEOUT);
-//	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
-
 	return status;
 }
 
 static HAL_StatusTypeDef MCT8316_Read(MCT8316 *mct8316, uint8_t address, uint8_t *data){
 	HAL_StatusTypeDef status;
-	uint16_t tx_message = 0, rx_message, purge;
+	uint16_t tx_message = 0, rx_message;
 	tx_message |= (address << MCT8316_MSG_ADDRESS_BIT);
 	tx_message |= (MCT8316_MSG_R << MCT8316_MSG_RW_BIT);
 	/* Compute parity */
@@ -199,14 +191,6 @@ static HAL_StatusTypeDef MCT8316_Read(MCT8316 *mct8316, uint8_t address, uint8_t
 	status = HAL_SPI_TransmitReceive(mct8316->hspi, (uint8_t *) &tx_message, (uint8_t *) &rx_message, 1, MCT8316_SPI_TIMEOUT);
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 	if (status != HAL_OK) return status;
-
-	/* Purge SPI bus */
-//	HAL_Delay(1);
-//	tx_message = 0;
-//
-//	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-//	status = HAL_SPI_TransmitReceive(mct8316->hspi, (uint8_t *) &tx_message, (uint8_t *) &purge, 1, MCT8316_SPI_TIMEOUT);
-//	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 
     *data = (uint8_t) (rx_message & 0xFF);
     mct8316->ic_status = (uint8_t) (rx_message >> 8);

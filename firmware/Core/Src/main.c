@@ -21,8 +21,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
+#include <stdlib.h>
 #include "mct8316.h"
-#include "math.h"
+#include "pid.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,8 +52,14 @@ PCD_HandleTypeDef hpcd_USB_FS;
 /* USER CODE BEGIN PV */
 MCT8316 mct8316;
 volatile int32_t hall_count = 0;
+volatile int32_t last_hall_count = 0;
+volatile float hall_speed = 0;
 volatile uint8_t last_hall_state = 0;
-uint8_t hall_state;
+volatile uint32_t last_tick = 0;
+
+PID posPID;
+int32_t action_k;
+int32_t action_km1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -110,11 +118,20 @@ int main(void)
 
 	/* Initialize PWM generation */
 	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
-	TIM2->CCR4 = 0;
-	uint32_t dummy;
-//	TIM2->CCR4 = 0;
-	MCT8316_SetDirection(&mct8316,0);
-//	MCT8316_ClearFaults(&mct8316);
+//	TIM2->CCR4 = 50;
+	TIM2->CCR4 = 50;
+	MCT8316_SetDirection(&mct8316,1);
+
+	posPID.Umax = 50;
+	posPID.Umin = -50;
+	posPID.kd = 0;
+	posPID.kp = 10;
+	posPID.ki = 0;
+	posPID.loop_freq = 100; //[Hz]
+	posPID.w_cutoff = 1;
+	PID_Initialize(&posPID);
+
+	posPID.x_k = 100 * posPID.multiplier;
 
 
 	/* USER CODE END 2 */
@@ -124,15 +141,31 @@ int main(void)
 	while (1)
 	{
 		MCT8316_UpdateStatus(&mct8316);
-		MCT8316_ClearFaults(&mct8316);
-		HAL_Delay(100);
-		dummy = HAL_GetTick()/500 + 10;
+		HAL_Delay(10);
+		posPID.h_k = hall_count * posPID.multiplier;
+		PID_Update(&posPID);
+		hall_speed = ((float)(hall_count - last_hall_count)) / ((float)(HAL_GetTick() - last_tick));
+		// Update last state
+		last_hall_count = hall_count;
+		last_tick = HAL_GetTick();
+		action_k = posPID.y_k / ((int32_t)posPID.multiplier);
+//		if(__SIGN(action_k) != __SIGN(action_km1)){
+//			if(__SIGN(action_k) == 1) MCT8316_SetDirection(&mct8316,1);
+//			else if(__SIGN(action_k) == -1) MCT8316_SetDirection(&mct8316,0);
+//		}
 
-		if(dummy > 50) dummy = 50;
+//		TIM2->CCR4 = 20+abs(action_k);
+//		TIM2->CCR4 = 40;
 
-		TIM2->CCR4 = dummy;
-
-		if(HAL_GetTick()/1000 == 50) MCT8316_SetDirection(&mct8316,1);
+		action_km1 = action_k;
+//		MCT8316_ClearFaults(&mct8316);
+//		dummy = HAL_GetTick()/500 + 10;
+//
+//		if(dummy > 50) dummy = 50;
+//
+//		TIM2->CCR4 = dummy;
+//
+//		if(HAL_GetTick()/1000 == 50) MCT8316_SetDirection(&mct8316,1);
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -347,6 +380,7 @@ static inline uint8_t is_valid_hall_state(uint8_t state)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	uint32_t gpio_read = HALL_A_GPIO_Port->IDR;
+	uint8_t hall_state;
 
 	// Read the current Hall state
 	hall_state = (__HALL_READ(gpio_read, HALL_A_Pin) << 2) |
@@ -381,6 +415,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 	// Update last state
 	last_hall_state = hall_state;
+
 }
 
 /* USER CODE END 4 */

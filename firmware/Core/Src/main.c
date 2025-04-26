@@ -143,7 +143,9 @@ int main(void)
 	posPID.w_cutoff = 1;
 	PID_Initialize(&posPID);
 
-	posPID.x_k = 2 * posPID.multiplier;
+	posPID.x_k = 50 * posPID.multiplier;
+
+	uint8_t enable_flag = SET;
 
 
 	/* USER CODE END 2 */
@@ -152,14 +154,14 @@ int main(void)
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		if(posPID.update_flag){
+		if(posPID.update_flag && enable_flag){
 			posPID.update_flag = RESET;
 			posPID.h_k = hall_speed * posPID.multiplier;
 			PID_Update(&posPID);
 			action_k = posPID.y_k / ((int32_t)posPID.multiplier);
 			TIM2->CCR4 = abs(action_k)+15;
 		}
-		if(flag_100hz){
+		if(flag_100hz && enable_flag){
 			flag_100hz = RESET;
 			if(__SIGN(action_k) != __SIGN(action_km1)){
 				if(__SIGN(action_k) == 1) MCT8316_SetDirection(&mct8316,1);
@@ -172,19 +174,36 @@ int main(void)
 			hall_speed = ALPHA_HALL_SPEED*(((float)(hall_count - last_hall_count)) * 10.f / 12.f) +
 					(1.f - ALPHA_HALL_SPEED) * hall_speed;
 			last_hall_count = hall_count;
-			last_tick = HAL_GetTick();
 			MCT8316_UpdateStatus(&mct8316); // TODO check errors and clear if needed
 		}
 		if(flag_1hz){
 			flag_1hz = RESET;
 			seconds_counter++;
-			if(seconds_counter == 10) posPID.x_k = -2 * posPID.multiplier;
-			else if(seconds_counter == 20) posPID.x_k = 10 * posPID.multiplier;
-			else if(seconds_counter == 30) posPID.x_k = -20 * posPID.multiplier;
-			else if(seconds_counter == 40) posPID.x_k = 40 * posPID.multiplier;
-			else if(seconds_counter == 50) posPID.x_k = -40 * posPID.multiplier;
-			else if(seconds_counter == 60) posPID.x_k = 50 * posPID.multiplier;
-		}
+			if(seconds_counter == 10) {
+				enable_flag = RESET;
+				TIM2->CCR4 = 0;
+			}
+			else if(seconds_counter == 20) {
+				enable_flag = SET;
+			}
+			else if(seconds_counter == 30) {
+				enable_flag = RESET;
+				TIM2->CCR4 = 0;
+			}
+			else if(seconds_counter == 40)
+				enable_flag = SET;
+			}
+			else if(seconds_counter == 50) {
+				enable_flag = RESET;
+				TIM2->CCR4 = 0;
+			}
+			else if(seconds_counter == 60) {
+				enable_flag = SET;
+			}
+			else if(seconds_counter == 70) {
+				enable_flag = RESET;
+				TIM2->CCR4 = 0;
+			}
 
 		/* USER CODE END WHILE */
 

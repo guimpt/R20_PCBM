@@ -173,16 +173,20 @@ DocumentPath=Project Outputs for R20_PCBM\Design Rule Check - R20_PCBM.html
 DItemRevisionGUID=
 
 [Parameter1]
-Name=PCB_Revision
-Value=R20_PCBM_v1.0
+Name=
+Value=
 
 [Parameter2]
+Name=Project_revision
+Value=PCBM 1.1
+
+[Parameter3]
 Name=Project
 Value=PCBM
 
-[Parameter3]
-Name=Project_revision
-Value=PCBM 1.0
+[Parameter4]
+Name=PCB_Revision
+Value=R20_PCBM_v1.1
 
 [Configuration1]
 Name=Sources
@@ -839,6 +843,13 @@ Type148=1
 Type149=1
 Type150=1
 Type151=1
+Type152=1
+Type153=1
+Type154=1
+Type155=1
+Type156=1
+Type157=1
+Type158=1
 
 [Difference Levels]
 Type1=1
@@ -923,6 +934,10 @@ Type79=1
 Type80=1
 Type81=1
 Type82=1
+Type83=1
+Type84=1
+Type85=1
+Type86=1
 
 [Electrical Rules Check]
 Type1=1

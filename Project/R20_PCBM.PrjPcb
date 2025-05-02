@@ -60,7 +60,9 @@ Fabrication=FAB-`ProjectName`
 Assembly=ASM-`ProjectName`-`VariantName`
 
 [Release]
-ReleaseTarget=3
+ReleaseTarget=2
+ReleaseFolderPath=[OutputPath]
+ReleaseZipPath=C:\Users\Guim\Documents\PROJECTES\Personal\R20_PCBM\Project\Project Outputs for R20_PCBM\release_v1.1.zip
 
 [Document1]
 DocumentPath=R20_PCBM.PcbLib

@@ -44,8 +44,8 @@ typedef struct{
 
 	// Derivative filter
 	float w_cutoff;
-	uint32_t filter_c1;
-	uint32_t filter_c2;
+	int32_t filter_c1;
+	int32_t filter_c2;
 
 	// Saturation
 	float Umax;

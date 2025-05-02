@@ -59,6 +59,8 @@ void PID_Update(PID *pid){
 	pid->xd_k = -((int64_t)pid->xd_k * pid->filter_c2) / MULTIPLIER;
 	pid->xd_k += (((((int64_t)pid->kd_int * (int64_t)pid->filter_c1) / MULTIPLIER) * ((int64_t)pid->h_k - (int64_t)pid->h_km1)) * pid->loop_freq) / MULTIPLIER;
 
+	pid->h_km1 = pid->h_k;
+
 	// Control action
 	pid->u_k = ((int64_t)pid->kp_int * (int64_t)(pid->xp_k - pid->xd_k)) / MULTIPLIER + pid->xi_k;
 

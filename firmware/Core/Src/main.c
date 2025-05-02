@@ -131,21 +131,23 @@ int main(void)
 	/* Initialize PID timer */
 	HAL_TIM_Base_Start_IT(&htim3);
 	//	TIM2->CCR4 = 50;
-	TIM2->CCR4 = 50;
+	TIM2->CCR4 = 0;
 	MCT8316_SetDirection(&mct8316,1);
 
-	posPID.Umax = 100;
-	posPID.Umin = -100;
-	posPID.kd = 0;
-	posPID.kp = 5;
-	posPID.ki = 0.02;
-	posPID.loop_freq = 100; //[Hz]
-	posPID.w_cutoff = 1;
+	posPID.Umax = 50;
+	posPID.Umin = -50;
+	posPID.kd = 0.001;
+	posPID.kp = 1;
+	posPID.ki = 0;
+	posPID.loop_freq = 1000; //[Hz]
+	posPID.w_cutoff = 5;
 	PID_Initialize(&posPID);
 
 	posPID.x_k = 50 * posPID.multiplier;
 
 	uint8_t enable_flag = SET;
+
+	HAL_Delay(10000);
 
 
 	/* USER CODE END 2 */
@@ -156,10 +158,10 @@ int main(void)
 	{
 		if(posPID.update_flag && enable_flag){
 			posPID.update_flag = RESET;
-			posPID.h_k = hall_speed * posPID.multiplier;
+			posPID.h_k = hall_count * posPID.multiplier;
 			PID_Update(&posPID);
 			action_k = posPID.y_k / ((int32_t)posPID.multiplier);
-			TIM2->CCR4 = abs(action_k)+15;
+			TIM2->CCR4 = abs(action_k)+18;
 		}
 		if(flag_100hz && enable_flag){
 			flag_100hz = RESET;
@@ -179,30 +181,26 @@ int main(void)
 		if(flag_1hz){
 			flag_1hz = RESET;
 			seconds_counter++;
-			if(seconds_counter == 10) {
-				enable_flag = RESET;
-				TIM2->CCR4 = 0;
+			if(seconds_counter == 3) {
+				posPID.x_k = -50 * posPID.multiplier;
+			}
+			else if(seconds_counter == 6) {
+				posPID.x_k = 98 * posPID.multiplier;
+			}
+			else if(seconds_counter == 10) {
+				posPID.x_k = -98 * posPID.multiplier;
+			}
+			else if(seconds_counter == 15)
+				posPID.x_k = 206 * posPID.multiplier;
 			}
 			else if(seconds_counter == 20) {
-				enable_flag = SET;
+				posPID.x_k = -206 * posPID.multiplier;
+			}
+			else if(seconds_counter == 25) {
+				posPID.x_k = 302 * posPID.multiplier;
 			}
 			else if(seconds_counter == 30) {
-				enable_flag = RESET;
-				TIM2->CCR4 = 0;
-			}
-			else if(seconds_counter == 40)
-				enable_flag = SET;
-			}
-			else if(seconds_counter == 50) {
-				enable_flag = RESET;
-				TIM2->CCR4 = 0;
-			}
-			else if(seconds_counter == 60) {
-				enable_flag = SET;
-			}
-			else if(seconds_counter == 70) {
-				enable_flag = RESET;
-				TIM2->CCR4 = 0;
+				posPID.x_k = -302 * posPID.multiplier;
 			}
 
 		/* USER CODE END WHILE */

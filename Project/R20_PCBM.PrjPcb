@@ -37,6 +37,8 @@ IsVirtualBomDocumentRemoved=0
 OutputPath=
 LogFolderPath=
 ManagedProjectGUID=
+VaultGUID=D95C5E11-3543-4C38-8647-2CCFC09FDBCD
+ReleaseVaultName=ABLE
 IncludeDesignInRelease=0
 CrossRefSheetStyle=1
 CrossRefLocationStyle=1
@@ -48,6 +50,17 @@ CrossRefFollowFromMainSettings=1
 [Preferences]
 PrefsVaultGUID=
 PrefsRevisionGUID=
+
+[ProjectReleaseNamings]
+ProjectMarco=R20_PCBM
+ProjectItemFolderPath=Projects\R20_PCBM
+ProjectItemHRID=
+Sources=SRC-`ProjectName`
+Fabrication=FAB-`ProjectName`
+Assembly=ASM-`ProjectName`-`VariantName`
+
+[Release]
+ReleaseTarget=3
 
 [Document1]
 DocumentPath=R20_PCBM.PcbLib
@@ -173,30 +186,48 @@ DocumentPath=Project Outputs for R20_PCBM\Design Rule Check - R20_PCBM.html
 DItemRevisionGUID=
 
 [Parameter1]
-Name=
-Value=
+Name=PCB_Revision
+Value=R20_PCBM_v1.1
 
 [Parameter2]
-Name=Project_revision
-Value=PCBM 1.1
-
-[Parameter3]
 Name=Project
 Value=PCBM
 
-[Parameter4]
-Name=PCB_Revision
-Value=R20_PCBM_v1.1
+[Parameter3]
+Name=Project_revision
+Value=PCBM 1.1
 
 [Configuration1]
 Name=Sources
 ParameterCount=0
 ConstraintFileCount=0
-ReleaseItemId=
+ReleaseItemId=BE0E0812-C165-4370-A9DB-E9BA4A188D2B
 Variant=[No Variations]
 OutputJobsCount=0
 ContentTypeGUID=CB6F2064-E317-11DF-B822-12313F0024A2
 ConfigurationType=Source
+
+[Configuration2]
+Name=Fabrication
+ParameterCount=0
+ConstraintFileCount=0
+ReleaseItemId=
+Variant=[No Variations]
+OutputJobsCount=0
+ContentTypeGUID=0C520D2A-E60C-11DF-B822-12313F0024A2
+ConfigurationType=Fabrication
+
+[Configuration3]
+Name=Assembly
+ParameterCount=0
+ConstraintFileCount=0
+ReleaseItemId=C3D8851E-5CBC-467D-941A-616D1E9B2DC6
+Variant=[No Variations]
+OutputJobsCount=1
+DocumentReferenceClass1=DocumentReference
+OutputJobFileName1=Manufacturing_JLC.OutJob
+ContentTypeGUID=0D12F8DC-E60C-11DF-B822-12313F0024A2
+ConfigurationType=Assembly
 
 [OutputGroup1]
 Name=Netlist Outputs

@@ -140,7 +140,7 @@ int main(void)
 	posPID.kp = 1;
 	posPID.ki = 0;
 	posPID.loop_freq = 1000; //[Hz]
-	posPID.w_cutoff = 5;
+	posPID.w_cutoff = 5; //[Hz]
 	PID_Initialize(&posPID);
 
 	posPID.x_k = 50 * posPID.multiplier;

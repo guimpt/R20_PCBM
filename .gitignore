@@ -3,6 +3,7 @@ Project Logs*
 Project outputs*
 __Previews
 PowerAnalyzer*
+old
 
 # Node artifact files
 .settings/
@@ -22,3 +23,5 @@ render
 *.stl
 *.step
 *.gif
+*.dxf
+*.3mf

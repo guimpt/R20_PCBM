@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include "mct8316.h"
 #include "pid.h"
+#include "tusb.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,8 +50,6 @@ SPI_HandleTypeDef hspi1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
-PCD_HandleTypeDef hpcd_USB_FS;
-
 /* USER CODE BEGIN PV */
 MCT8316 mct8316;
 volatile int32_t hall_count = 0;
@@ -74,7 +73,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_USB_PCD_Init(void);
+static void USB_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
@@ -117,7 +116,6 @@ int main(void)
 	MX_GPIO_Init();
 	MX_SPI1_Init();
 	MX_TIM2_Init();
-	MX_USB_PCD_Init();
 	MX_TIM3_Init();
 	/* USER CODE BEGIN 2 */
 
@@ -149,6 +147,8 @@ int main(void)
 
 	HAL_Delay(10000);
 
+	USB_Init();
+
 
 	/* USER CODE END 2 */
 
@@ -156,6 +156,7 @@ int main(void)
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
+		tud_task();
 		if(posPID.update_flag && enable_flag){
 			posPID.update_flag = RESET;
 			posPID.h_k = hall_count * posPID.multiplier;
@@ -391,31 +392,17 @@ static void MX_TIM3_Init(void)
  * @param None
  * @retval None
  */
-static void MX_USB_PCD_Init(void)
+static void USB_Init(void)
 {
+	__HAL_RCC_USB_CLK_ENABLE();
+	HAL_NVIC_SetPriority(USB_IRQn, 2, 0);
+	HAL_NVIC_EnableIRQ(USB_IRQn);
 
-	/* USER CODE BEGIN USB_Init 0 */
-
-	/* USER CODE END USB_Init 0 */
-
-	/* USER CODE BEGIN USB_Init 1 */
-
-	/* USER CODE END USB_Init 1 */
-	hpcd_USB_FS.Instance = USB;
-	hpcd_USB_FS.Init.dev_endpoints = 8;
-	hpcd_USB_FS.Init.speed = PCD_SPEED_FULL;
-	hpcd_USB_FS.Init.phy_itface = PCD_PHY_EMBEDDED;
-	hpcd_USB_FS.Init.low_power_enable = DISABLE;
-	hpcd_USB_FS.Init.lpm_enable = DISABLE;
-	hpcd_USB_FS.Init.battery_charging_enable = DISABLE;
-	if (HAL_PCD_Init(&hpcd_USB_FS) != HAL_OK)
-	{
-		Error_Handler();
-	}
-	/* USER CODE BEGIN USB_Init 2 */
-
-	/* USER CODE END USB_Init 2 */
-
+	const tusb_rhport_init_t rh_init = {
+		.role = TUSB_ROLE_DEVICE,
+		.speed = TUSB_SPEED_FULL
+	};
+	tud_rhport_init(BOARD_TUD_RHPORT, &rh_init);
 }
 
 /**

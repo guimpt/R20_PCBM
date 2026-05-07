@@ -60,6 +60,10 @@ volatile uint8_t last_hall_state = 0;
 volatile uint32_t last_tick = 0;
 
 PID posPID;
+PID velPID;
+ctrl_mode_t ctrl_mode = MODE_POSITION;
+volatile int32_t vel_prev_count = 0;
+volatile float vel_filtered = 0;
 int32_t action_k;
 int32_t action_km1;
 uint16_t timer_counter = 0;
@@ -142,9 +146,16 @@ int main(void)
 	posPID.w_cutoff = 5; //[Hz]
 	PID_Initialize(&posPID);
 
-	posPID.x_k = 0;
+	velPID.Umax = 50;
+	velPID.Umin = -50;
+	velPID.kd = 0.001;
+	velPID.kp = 0.1;
+	velPID.ki = 2;
+	velPID.loop_freq = 100; //[Hz]
+	velPID.w_cutoff = 5; //[Hz]
+	PID_Initialize(&velPID);
 
-	HAL_Delay(10000);
+	posPID.x_k = 0;
 
 	USB_Init();
 	CLI_Init();
@@ -158,11 +169,22 @@ int main(void)
 	{
 		tud_task();
 		CLI_Process();
-		if(posPID.update_flag && enable_flag){
+		if(ctrl_mode == MODE_POSITION && posPID.update_flag && enable_flag){
 			posPID.update_flag = RESET;
 			posPID.h_k = hall_count * posPID.multiplier;
 			PID_Update(&posPID);
 			action_k = posPID.y_k / ((int32_t)posPID.multiplier);
+			TIM2->CCR4 = abs(action_k)+18;
+		}
+		if(ctrl_mode == MODE_VELOCITY && velPID.update_flag && enable_flag){
+			velPID.update_flag = RESET;
+			int32_t delta = hall_count - vel_prev_count;
+			vel_prev_count = hall_count;
+			float vel_raw = (float)delta * 100.0f;
+			vel_filtered = 0.3f * vel_raw + 0.7f * vel_filtered;
+			velPID.h_k = (int32_t)(vel_filtered * (float)velPID.multiplier);
+			PID_Update(&velPID);
+			action_k = velPID.y_k / ((int32_t)velPID.multiplier);
 			TIM2->CCR4 = abs(action_k)+18;
 		}
 		if(flag_100hz && enable_flag){
@@ -175,7 +197,7 @@ int main(void)
 		}
 		if(flag_10hz){
 			flag_10hz = RESET;
-			hall_speed = ALPHA_HALL_SPEED*(((float)(hall_count - last_hall_count)) * 10.f / 12.f) +
+			hall_speed = ALPHA_HALL_SPEED*(((float)(hall_count - last_hall_count)) * 10.f / HALL_COUNTS_PER_REV) +
 					(1.f - ALPHA_HALL_SPEED) * hall_speed;
 			last_hall_count = hall_count;
 			MCT8316_UpdateStatus(&mct8316); // TODO check errors and clear if needed
@@ -492,6 +514,7 @@ void TIM3_IRQHandler(void)
   }
   if((timer_counter%10) == 0) { // 100Hz
 	  flag_100hz = SET;
+	  velPID.update_flag = SET;
 	  if((timer_counter%100) == 0) flag_10hz = SET; // 10Hz
   }
 }

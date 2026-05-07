@@ -7,9 +7,14 @@
 
 // Externs from main.c
 extern PID posPID;
+extern PID velPID;
+extern ctrl_mode_t ctrl_mode;
 extern volatile int32_t hall_count;
 extern volatile float hall_speed;
+extern volatile float vel_filtered;
+extern volatile int32_t vel_prev_count;
 extern int32_t action_k;
+extern int32_t action_km1;
 extern MCT8316 mct8316;
 extern uint8_t enable_flag;
 
@@ -53,8 +58,11 @@ static void cmd_pid(int argc, char **argv);
 static void cmd_umax(int argc, char **argv);
 static void cmd_umin(int argc, char **argv);
 static void cmd_freq(int argc, char **argv);
+static void cmd_mode(int argc, char **argv);
+static void cmd_vel(int argc, char **argv);
 static void cmd_brake(int argc, char **argv);
 static void cmd_monitor(int argc, char **argv);
+static PID *active_pid(void);
 
 typedef struct {
     const char *name;
@@ -76,6 +84,8 @@ static const cmd_entry_t cmd_table[] = {
     {"umax",    cmd_umax},
     {"umin",    cmd_umin},
     {"freq",    cmd_freq},
+    {"mode",    cmd_mode},
+    {"vel",     cmd_vel},     {"v",  cmd_vel},
     {"brake",   cmd_brake},
     {"monitor", cmd_monitor}, {"m",  cmd_monitor},
 };
@@ -383,8 +393,17 @@ static void cli_print_faults(uint8_t ic_status)
 
 static void CLI_PrintStatus(void)
 {
-    cli_puts("pos:");
-    cli_puti((int32_t)hall_count);
+    if (ctrl_mode == MODE_POSITION) {
+        cli_puts("pos:");
+        cli_puti((int32_t)hall_count);
+        cli_puts(" set:");
+        cli_puti((int32_t)(posPID.x_k / (int32_t)posPID.multiplier));
+    } else {
+        cli_puts("vel:");
+        cli_putf(vel_filtered / (float)HALL_COUNTS_PER_REV, 1);
+        cli_puts(" set:");
+        cli_putf((float)(velPID.x_k / (int32_t)velPID.multiplier) / (float)HALL_COUNTS_PER_REV, 1);
+    }
     cli_puts(" spd:");
     cli_putf(hall_speed, 1);
     cli_puts(" u:");
@@ -404,7 +423,9 @@ static void cmd_help(int argc, char **argv)
         "enable  (e)  Start motor\r\n"
         "disable (d)  Stop motor\r\n"
         "clear        Clear faults\r\n"
+        "mode pos|vel Control mode\r\n"
         "pos [n] (p)  Position setpoint\r\n"
+        "vel [n] (v)  Velocity setpoint (rev/s)\r\n"
         "home    (h)  Zero encoder\r\n"
         "kp/ki/kd [v] PID gains\r\n"
         "pid          All PID params\r\n"
@@ -420,8 +441,15 @@ static void cmd_status(int argc, char **argv)
     (void)argc; (void)argv;
     cli_puts("pos:  ");
     cli_puti((int32_t)hall_count);
-    cli_puts("  setpt: ");
-    cli_puti((int32_t)(posPID.x_k / (int32_t)posPID.multiplier));
+    if (ctrl_mode == MODE_POSITION) {
+        cli_puts("  setpt: ");
+        cli_puti((int32_t)(posPID.x_k / (int32_t)posPID.multiplier));
+    } else {
+        cli_puts("  vel_sp: ");
+        cli_putf((float)(velPID.x_k / (int32_t)velPID.multiplier) / (float)HALL_COUNTS_PER_REV, 1);
+        cli_puts("  vel_filt: ");
+        cli_putf(vel_filtered / (float)HALL_COUNTS_PER_REV, 1);
+    }
     cli_puts("\r\nspd:  ");
     cli_putf(hall_speed, 1);
     cli_puts("  pwm: ");
@@ -429,6 +457,8 @@ static void cmd_status(int argc, char **argv)
     cli_puts("  u: ");
     cli_puti((int32_t)action_k);
     cli_puts("\r\nmode: ");
+    cli_puts(ctrl_mode == MODE_POSITION ? "pos" : "vel");
+    cli_puts("  state: ");
     cli_puts(enable_flag ? "ENABLED" : "DISABLED");
     cli_puts("  fault: ");
     cli_print_faults(mct8316.ic_status);
@@ -459,6 +489,10 @@ static void cmd_clear(int argc, char **argv)
 
 static void cmd_pos(int argc, char **argv)
 {
+    if (ctrl_mode != MODE_POSITION) {
+        cli_puts("err: not in position mode (use: mode pos)\r\n");
+        return;
+    }
     if (argc >= 2) {
         int32_t target = cli_atoi(argv[1]);
         posPID.x_k = target * (int32_t)posPID.multiplier;
@@ -478,85 +512,148 @@ static void cmd_home(int argc, char **argv)
     cli_puts("ok\r\n");
 }
 
-static void cmd_kp(int argc, char **argv)
+static PID *active_pid(void)
+{
+    return (ctrl_mode == MODE_VELOCITY) ? &velPID : &posPID;
+}
+
+static void cmd_mode(int argc, char **argv)
 {
     if (argc >= 2) {
-        posPID.kp = cli_atof(argv[1]);
-        PID_UpdateCoefficients(&posPID);
+        if (cli_strcasecmp(argv[1], "pos") == 0) {
+            if (ctrl_mode != MODE_POSITION) {
+                TIM2->CCR4 = 0;
+                action_k = 0;
+                action_km1 = 0;
+                ctrl_mode = MODE_POSITION;
+                PID_Initialize(&posPID);
+                posPID.x_k = hall_count * posPID.multiplier;
+            }
+            cli_puts("mode: position\r\n");
+        } else if (cli_strcasecmp(argv[1], "vel") == 0) {
+            if (ctrl_mode != MODE_VELOCITY) {
+                TIM2->CCR4 = 0;
+                action_k = 0;
+                action_km1 = 0;
+                ctrl_mode = MODE_VELOCITY;
+                vel_prev_count = hall_count;
+                vel_filtered = 0;
+                PID_Initialize(&velPID);
+            }
+            cli_puts("mode: velocity\r\n");
+        } else {
+            cli_puts("usage: mode pos|vel\r\n");
+        }
+    } else {
+        cli_puts("mode: ");
+        cli_puts(ctrl_mode == MODE_POSITION ? "position" : "velocity");
+        cli_puts("\r\n");
+    }
+}
+
+static void cmd_vel(int argc, char **argv)
+{
+    if (ctrl_mode != MODE_VELOCITY) {
+        cli_puts("err: not in velocity mode (use: mode vel)\r\n");
+        return;
+    }
+    if (argc >= 2) {
+        float target = cli_atof(argv[1]);
+        velPID.x_k = (int32_t)(target * (float)HALL_COUNTS_PER_REV * (float)velPID.multiplier);
+    }
+    cli_puts("vel = ");
+    cli_putf((float)(velPID.x_k / (int32_t)velPID.multiplier) / (float)HALL_COUNTS_PER_REV, 1);
+    cli_puts(" rev/s\r\n");
+}
+
+static void cmd_kp(int argc, char **argv)
+{
+    PID *pid = active_pid();
+    if (argc >= 2) {
+        pid->kp = cli_atof(argv[1]);
+        PID_UpdateCoefficients(pid);
     }
     cli_puts("kp = ");
-    cli_putf(posPID.kp, 4);
+    cli_putf(pid->kp, 4);
     cli_puts("\r\n");
 }
 
 static void cmd_ki(int argc, char **argv)
 {
+    PID *pid = active_pid();
     if (argc >= 2) {
-        posPID.ki = cli_atof(argv[1]);
-        PID_UpdateCoefficients(&posPID);
+        pid->ki = cli_atof(argv[1]);
+        PID_UpdateCoefficients(pid);
     }
     cli_puts("ki = ");
-    cli_putf(posPID.ki, 4);
+    cli_putf(pid->ki, 4);
     cli_puts("\r\n");
 }
 
 static void cmd_kd(int argc, char **argv)
 {
+    PID *pid = active_pid();
     if (argc >= 2) {
-        posPID.kd = cli_atof(argv[1]);
-        PID_UpdateCoefficients(&posPID);
+        pid->kd = cli_atof(argv[1]);
+        PID_UpdateCoefficients(pid);
     }
     cli_puts("kd = ");
-    cli_putf(posPID.kd, 4);
+    cli_putf(pid->kd, 4);
     cli_puts("\r\n");
 }
 
 static void cmd_pid(int argc, char **argv)
 {
+    PID *pid = active_pid();
     (void)argc; (void)argv;
-    cli_puts("kp   = "); cli_putf(posPID.kp, 4); cli_puts("\r\n");
-    cli_puts("ki   = "); cli_putf(posPID.ki, 4); cli_puts("\r\n");
-    cli_puts("kd   = "); cli_putf(posPID.kd, 4); cli_puts("\r\n");
-    cli_puts("umax = "); cli_putf(posPID.Umax, 1); cli_puts("\r\n");
-    cli_puts("umin = "); cli_putf(posPID.Umin, 1); cli_puts("\r\n");
-    cli_puts("freq = "); cli_putf(posPID.w_cutoff, 1); cli_puts(" Hz\r\n");
+    cli_puts(ctrl_mode == MODE_POSITION ? "pos" : "vel");
+    cli_puts(" pid\r\n");
+    cli_puts("kp   = "); cli_putf(pid->kp, 4); cli_puts("\r\n");
+    cli_puts("ki   = "); cli_putf(pid->ki, 4); cli_puts("\r\n");
+    cli_puts("kd   = "); cli_putf(pid->kd, 4); cli_puts("\r\n");
+    cli_puts("umax = "); cli_putf(pid->Umax, 1); cli_puts("\r\n");
+    cli_puts("umin = "); cli_putf(pid->Umin, 1); cli_puts("\r\n");
+    cli_puts("freq = "); cli_putf(pid->w_cutoff, 1); cli_puts(" Hz\r\n");
 }
 
 static void cmd_umax(int argc, char **argv)
 {
+    PID *pid = active_pid();
     if (argc >= 2) {
-        posPID.Umax = cli_atof(argv[1]);
-        PID_UpdateCoefficients(&posPID);
+        pid->Umax = cli_atof(argv[1]);
+        PID_UpdateCoefficients(pid);
     }
     cli_puts("umax = ");
-    cli_putf(posPID.Umax, 1);
+    cli_putf(pid->Umax, 1);
     cli_puts("\r\n");
 }
 
 static void cmd_umin(int argc, char **argv)
 {
+    PID *pid = active_pid();
     if (argc >= 2) {
-        posPID.Umin = cli_atof(argv[1]);
-        PID_UpdateCoefficients(&posPID);
+        pid->Umin = cli_atof(argv[1]);
+        PID_UpdateCoefficients(pid);
     }
     cli_puts("umin = ");
-    cli_putf(posPID.Umin, 1);
+    cli_putf(pid->Umin, 1);
     cli_puts("\r\n");
 }
 
 static void cmd_freq(int argc, char **argv)
 {
+    PID *pid = active_pid();
     if (argc >= 2) {
         float val = cli_atof(argv[1]);
         if (val <= 0) {
             cli_puts("err: freq must be > 0\r\n");
             return;
         }
-        posPID.w_cutoff = val;
-        PID_UpdateCoefficients(&posPID);
+        pid->w_cutoff = val;
+        PID_UpdateCoefficients(pid);
     }
     cli_puts("freq = ");
-    cli_putf(posPID.w_cutoff, 1);
+    cli_putf(pid->w_cutoff, 1);
     cli_puts(" Hz\r\n");
 }
 

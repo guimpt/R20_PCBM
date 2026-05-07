@@ -36,7 +36,7 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
+typedef enum { MODE_POSITION, MODE_VELOCITY } ctrl_mode_t;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -82,6 +82,8 @@ void Error_Handler(void);
         ((__x__) < 0) ? -1 :                    \
                          0                      \
     )
+
+#define HALL_COUNTS_PER_REV 12
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

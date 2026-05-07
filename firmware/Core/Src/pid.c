@@ -43,6 +43,20 @@ void PID_Initialize(PID *pid){
 	pid->multiplier = MULTIPLIER;
 }
 
+void PID_UpdateCoefficients(PID *pid){
+	pid->kp_int = pid->kp * MULTIPLIER;
+	pid->ki_int = pid->ki * MULTIPLIER;
+	pid->kd_int = pid->kd * MULTIPLIER;
+
+	float tau = 1.f / (float)pid->w_cutoff;
+	float T = 1.f / (float)pid->loop_freq;
+	pid->filter_c1 = (2.f * MULTIPLIER)  / (T + 2 * tau);
+	pid->filter_c2 = ((T - 2.f * tau) * MULTIPLIER) / (T + 2 * tau);
+
+	pid->Umax_int = (pid->Umax * MULTIPLIER);
+	pid->Umin_int = (pid->Umin * MULTIPLIER);
+}
+
 /**
   * @brief pidLoop Update (+1 loop cycle)
   * @param PID data type
@@ -70,4 +84,3 @@ void PID_Update(PID *pid){
 	else pid->y_k = pid->u_k;
 
 }
-

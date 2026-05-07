@@ -68,6 +68,7 @@ typedef struct{
  */
 
 void PID_Initialize(PID *pid);
+void PID_UpdateCoefficients(PID *pid);
 void PID_Update(PID *pid);
 
 #endif /* INC_PID_H_ */

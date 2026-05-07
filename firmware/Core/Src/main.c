@@ -26,6 +26,7 @@
 #include "mct8316.h"
 #include "pid.h"
 #include "tusb.h"
+#include "cli.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,7 +66,7 @@ uint16_t timer_counter = 0;
 uint8_t flag_100hz = RESET;
 uint8_t flag_10hz = RESET;
 uint8_t flag_1hz = RESET;
-uint32_t seconds_counter = 0;
+uint8_t enable_flag = SET;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -141,13 +142,12 @@ int main(void)
 	posPID.w_cutoff = 5; //[Hz]
 	PID_Initialize(&posPID);
 
-	posPID.x_k = 50 * posPID.multiplier;
-
-	uint8_t enable_flag = SET;
+	posPID.x_k = 0;
 
 	HAL_Delay(10000);
 
 	USB_Init();
+	CLI_Init();
 
 
 	/* USER CODE END 2 */
@@ -157,6 +157,7 @@ int main(void)
 	while (1)
 	{
 		tud_task();
+		CLI_Process();
 		if(posPID.update_flag && enable_flag){
 			posPID.update_flag = RESET;
 			posPID.h_k = hall_count * posPID.multiplier;
@@ -181,28 +182,7 @@ int main(void)
 		}
 		if(flag_1hz){
 			flag_1hz = RESET;
-			seconds_counter++;
-			if(seconds_counter == 3) {
-				posPID.x_k = -50 * posPID.multiplier;
-			}
-			else if(seconds_counter == 6) {
-				posPID.x_k = 98 * posPID.multiplier;
-			}
-			else if(seconds_counter == 10) {
-				posPID.x_k = -98 * posPID.multiplier;
-			}
-			else if(seconds_counter == 15)
-				posPID.x_k = 206 * posPID.multiplier;
-			}
-			else if(seconds_counter == 20) {
-				posPID.x_k = -206 * posPID.multiplier;
-			}
-			else if(seconds_counter == 25) {
-				posPID.x_k = 302 * posPID.multiplier;
-			}
-			else if(seconds_counter == 30) {
-				posPID.x_k = -302 * posPID.multiplier;
-			}
+		}
 
 		/* USER CODE END WHILE */
 
@@ -505,6 +485,7 @@ void TIM3_IRQHandler(void)
 {
   HAL_TIM_IRQHandler(&htim3);
   posPID.update_flag = SET;
+  CLI_Tick();
   if(++timer_counter >= 1000) {
 	  timer_counter = 0;
 	  flag_1hz = SET;
